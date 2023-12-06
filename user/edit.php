@@ -185,7 +185,12 @@ if ($returnto === 'profile') {
         $returnurl = new moodle_url('/user/profile.php', array('id' => $user->id));
     }
 } else {
-    $returnurl = new moodle_url('/user/preferences.php', array('userid' => $user->id));
+    // MDL-80343 Send the user back to where they were originally sent.
+    if(!empty($SESSION->wantsurl)) {
+        $returnurl = $SESSION->wantsurl;
+    } else {
+        $returnurl = new moodle_url('/user/preferences.php', array('userid' => $user->id));
+    }
 }
 
 if ($userform->is_cancelled()) {
