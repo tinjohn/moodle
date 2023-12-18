@@ -147,7 +147,8 @@ class section implements named_templatable, renderable {
             'summary' => $summary->export_for_template($output),
             'highlightedlabel' => $format->get_section_highlighted_name(),
             'sitehome' => $course->id == SITEID,
-            'editing' => $PAGE->user_is_editing()
+            'editing' => $PAGE->user_is_editing(),
+            'displayonesection' => ($course->id != SITEID && $format->get_section_number() !== 0),
         ];
 
         $haspartials = [];
@@ -283,11 +284,16 @@ class section implements named_templatable, renderable {
      * @return bool if the cm has name data
      */
     protected function add_editor_data(stdClass &$data, renderer_base $output): bool {
-        if (!$this->format->show_editor()) {
+        $course = $this->format->get_course();
+        $coursecontext = context_course::instance($course->id);
+        $editcaps = [];
+        if (has_capability('moodle/course:sectionvisibility', $coursecontext)) {
+            $editcaps = ['moodle/course:sectionvisibility'];
+        }
+        if (!$this->format->show_editor($editcaps)) {
             return false;
         }
 
-        $course = $this->format->get_course();
         if (empty($this->hidecontrols)) {
             $controlmenu = new $this->controlmenuclass($this->format, $this->section);
             $data->controlmenu = $controlmenu->export_for_template($output);

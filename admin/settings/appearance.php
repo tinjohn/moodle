@@ -147,14 +147,14 @@ if ($hassiteconfig or has_any_capability($capabilities, $systemcontext)) { // sp
     ));
 
     $choices = [HOMEPAGE_SITE => new lang_string('home')];
-    if (!empty($CFG->enabledashboard)) {
+    if (!isset($CFG->enabledashboard) || $CFG->enabledashboard) {
         $choices[HOMEPAGE_MY] = new lang_string('mymoodle', 'admin');
     }
     $choices[HOMEPAGE_MYCOURSES] = new lang_string('mycourses', 'admin');
     $choices[HOMEPAGE_USER] = new lang_string('userpreference', 'admin');
     $temp->add(new admin_setting_configselect('defaulthomepage', new lang_string('defaulthomepage', 'admin'),
             new lang_string('configdefaulthomepage', 'admin'), get_default_home_page(), $choices));
-    if (!empty($CFG->enabledashboard)) {
+    if (!isset($CFG->enabledashboard) || $CFG->enabledashboard) {
         $temp->add(new admin_setting_configcheckbox(
             'allowguestmymoodle',
             new lang_string('allowguestmymoodle', 'admin'),
@@ -181,7 +181,6 @@ if ($hassiteconfig or has_any_capability($capabilities, $systemcontext)) { // sp
         new lang_string('confignavcourselimit', 'admin'), 10, PARAM_INT));
     $temp->add(new admin_setting_configcheckbox('usesitenameforsitepages', new lang_string('usesitenameforsitepages', 'admin'), new lang_string('configusesitenameforsitepages', 'admin'), 0));
     $temp->add(new admin_setting_configcheckbox('linkadmincategories', new lang_string('linkadmincategories', 'admin'), new lang_string('linkadmincategories_help', 'admin'), 1));
-    $temp->add(new admin_setting_configcheckbox('linkcoursesections', new lang_string('linkcoursesections', 'admin'), new lang_string('linkcoursesections_help', 'admin'), 1));
     $temp->add(new admin_setting_configcheckbox('navshowfrontpagemods', new lang_string('navshowfrontpagemods', 'admin'), new lang_string('navshowfrontpagemods_help', 'admin'), 1));
     $temp->add(new admin_setting_configcheckbox('navadduserpostslinks', new lang_string('navadduserpostslinks', 'admin'), new lang_string('navadduserpostslinks_help', 'admin'), 1));
 

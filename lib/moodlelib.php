@@ -5048,7 +5048,7 @@ function get_complete_user_data($field, $value, $mnethostid = null, $throwexcept
 function check_password_policy($password, &$errmsg, $user = null) {
     global $CFG;
 
-    if (!empty($CFG->passwordpolicy)) {
+    if (!empty($CFG->passwordpolicy) && !isguestuser($user)) {
         $errmsg = '';
         if (core_text::strlen($password) < $CFG->minpasswordlength) {
             $errmsg .= '<div>'. get_string('errorminpasswordlength', 'auth', $CFG->minpasswordlength) .'</div>';
@@ -10657,7 +10657,7 @@ function get_home_page() {
 function get_default_home_page(): int {
     global $CFG;
 
-    return !empty($CFG->enabledashboard) ? HOMEPAGE_MY : HOMEPAGE_MYCOURSES;
+    return (!isset($CFG->enabledashboard) || $CFG->enabledashboard) ? HOMEPAGE_MY : HOMEPAGE_MYCOURSES;
 }
 
 /**
