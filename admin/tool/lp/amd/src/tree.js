@@ -222,6 +222,39 @@ define(['jquery', 'core/url', 'core/log'], function($, url, log) {
     };
 
     /**
+     * Toggle selected parent and its children. Make sure all the parents are expanded.
+     *
+     * @method selectItemChildren
+     * @param {Object} item is the jquery id of the newly selected item.
+     */
+    Tree.prototype.toggleItemNChildren = function(item) {
+        // Expand all nodes up the tree.
+        var walk = item.parent();
+        while (walk.attr('role') != 'tree') {
+            walk = walk.parent();
+            if (walk.attr('aria-expanded') == 'false') {
+                this.expandGroup(walk);
+            }
+            walk = walk.parent();
+        }
+         var current = item.attr('aria-selected');
+         if (current === 'true') {
+            current = 'false';
+        } else {
+            current = 'true';
+        }
+        item.attr('aria-selected', current);
+        //Select all children if it is a parent node.
+        if (item.has('ul')) {
+            item.find('li').each(function() {
+                var currentItem = $(this);
+               currentItem.attr('aria-selected', current);
+            });
+        }
+        this.triggerChange();
+    };
+
+    /**
      * Toggle the selected state for an item back and forth.
      *
      * @method toggleItem
@@ -559,7 +592,11 @@ define(['jquery', 'core/url', 'core/log'], function($, url, log) {
     Tree.prototype.handleClick = function(item, e) {
 
         if (e.shiftKey) {
-            this.multiSelectItem(item);
+            if (e.shiftKey && e.altKey) {
+                this.toggleItemNChildren(item);
+            } else {
+                this.multiSelectItem(item);
+            }
         } else if (e.metaKey || e.ctrlKey) {
             this.toggleItem(item);
         } else {
