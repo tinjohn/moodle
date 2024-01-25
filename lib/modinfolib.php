@@ -33,6 +33,7 @@ if (!defined('MAX_MODINFO_CACHE_SIZE')) {
 }
 
 use core_courseformat\output\activitybadge;
+use core_courseformat\sectiondelegate;
 
 /**
  * Information about a course that is cached in the course table 'modinfo' field (and then in
@@ -85,6 +86,12 @@ class course_modinfo {
      * @var section_info[]
      */
     private $sectioninfobyid;
+
+    /**
+     * Index of delegated sections (indexed by component and itemid)
+     * @var array
+     */
+    private $delegatedsections;
 
     /**
      * User ID
@@ -350,6 +357,36 @@ class course_modinfo {
     }
 
     /**
+     * Gets data about specific delegated section.
+     * @param string $component Component name
+     * @param int $itemid Item id
+     * @param int $strictness Use MUST_EXIST to throw exception if it doesn't
+     * @return section_info|null Information for numbered section or null if not found
+     */
+    public function get_section_info_by_component(
+        string $component,
+        int $itemid,
+        int $strictness = IGNORE_MISSING
+    ): ?section_info {
+        if (!isset($this->delegatedsections[$component][$itemid])) {
+            if ($strictness === MUST_EXIST) {
+                throw new moodle_exception('sectionnotexist');
+            } else {
+                return null;
+            }
+        }
+        return $this->delegatedsections[$component][$itemid];
+    }
+
+    /**
+     * Check if the course has delegated sections.
+     * @return bool
+     */
+    public function has_delegated_sections(): bool {
+        return !empty($this->delegatedsections);
+    }
+
+    /**
      * Static cache for generated course_modinfo instances
      *
      * @see course_modinfo::instance()
@@ -581,11 +618,18 @@ class course_modinfo {
         // Expand section objects
         $this->sectioninfobynum = [];
         $this->sectioninfobyid = [];
+        $this->delegatedsections = [];
         foreach ($coursemodinfo->sectioncache as $data) {
             $sectioninfo = new section_info($data, $data->section, null, null,
                 $this, null);
             $this->sectioninfobynum[$data->section] = $sectioninfo;
             $this->sectioninfobyid[$data->id] = $sectioninfo;
+            if (!empty($sectioninfo->component)) {
+                if (!isset($this->delegatedsections[$sectioninfo->component])) {
+                    $this->delegatedsections[$sectioninfo->component] = [];
+                }
+                $this->delegatedsections[$sectioninfo->component][$sectioninfo->itemid] = $sectioninfo;
+            }
         }
         ksort($this->sectioninfobynum);
     }
@@ -618,7 +662,7 @@ class course_modinfo {
             'course_sections',
             ['course' => $course->id],
             'section',
-            'id, section, course, name, summary, summaryformat, sequence, visible, availability'
+            'id, section, course, name, summary, summaryformat, sequence, visible, availability, component, itemid'
         );
         $compressedsections = [];
         $courseformat = course_get_format($course);
@@ -2804,7 +2848,7 @@ function get_course_and_cm_from_instance($instanceorid, $modulename, $courseorid
     $modinfo = get_fast_modinfo($course, $userid);
     $instances = $modinfo->get_instances_of($modulename);
     if (!array_key_exists($instanceid, $instances)) {
-        throw new moodle_exception('invalidmoduleid', 'error', $instanceid);
+        throw new moodle_exception('invalidmoduleid', 'error', '', $instanceid);
     }
     return array($course, $instances[$instanceid]);
 }
@@ -2994,8 +3038,9 @@ class cached_cm_info {
  * @property-read int $visible Section visibility (1 = visible) - from course_sections table
  * @property-read string $summary Section summary text if specified - from course_sections table
  * @property-read int $summaryformat Section summary text format (FORMAT_xx constant) - from course_sections table
- * @property-read string $availability Availability information as JSON string -
- *    from course_sections table
+ * @property-read string $availability Availability information as JSON string - from course_sections table
+ * @property-read string|null $component Optional section delegate component - from course_sections table
+ * @property-read int|null $itemid Optional section delegate item id - from course_sections table
  * @property-read array $conditionscompletion Availability conditions for this section based on the completion of
  *    course-modules (array from course-module id to required completion state
  *    for that module) - from cached data in sectioncache field
@@ -3059,6 +3104,21 @@ class section_info implements IteratorAggregate {
     private $_availability;
 
     /**
+     * @var string|null the delegated component if any.
+     */
+    private ?string $_component = null;
+
+    /**
+     * @var int|null the delegated instance item id if any.
+     */
+    private ?int $_itemid = null;
+
+    /**
+     * @var sectiondelegate|null Section delegate instance if any.
+     */
+    private ?sectiondelegate $_delegateinstance = null;
+
+    /**
      * Availability conditions for this section based on the completion of
      * course-modules (array from course-module id to required completion state
      * for that module) - from cached data in sectioncache field
@@ -3116,7 +3176,9 @@ class section_info implements IteratorAggregate {
         'summary' => '',
         'summaryformat' => '1', // FORMAT_HTML, but must be a string
         'visible' => '1',
-        'availability' => null
+        'availability' => null,
+        'component' => null,
+        'itemid' => null,
     );
 
     /**
@@ -3413,6 +3475,20 @@ class section_info implements IteratorAggregate {
      */
     private function get_section_number(): int {
         return $this->sectionnum;
+    }
+
+    /**
+     * Get the delegate component instance.
+     */
+    public function get_component_instance(): ?sectiondelegate {
+        if (empty($this->_component)) {
+            return null;
+        }
+        if ($this->_delegateinstance !== null) {
+            return $this->_delegateinstance;
+        }
+        $this->_delegateinstance = sectiondelegate::instance($this);
+        return $this->_delegateinstance;
     }
 
     /**

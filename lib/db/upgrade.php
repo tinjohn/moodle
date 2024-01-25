@@ -91,12 +91,12 @@ function xmldb_main_upgrade($oldversion) {
 
     // Always keep this upgrade step with version being the minimum
     // allowed version to upgrade from (v4.1.2 right now).
-    if ($oldversion < 2021112802) {
+    if ($oldversion < 2022112802) {
         // Just in case somebody hacks upgrade scripts or env, we really can not continue.
         echo("You need to upgrade to 4.1.2 or higher first!\n");
         exit(1);
         // Note this savepoint is 100% unreachable, but needed to pass the upgrade checks.
-        upgrade_main_savepoint(true, 2021112802);
+        upgrade_main_savepoint(true, 2022112802);
     }
 
     // Automatically generated Moodle v4.1.0 release upgrade line.
@@ -862,6 +862,121 @@ function xmldb_main_upgrade($oldversion) {
         unset_config('linkcoursesections');
 
         upgrade_main_savepoint(true, 2023120100.01);
+    }
+
+    if ($oldversion < 2023121800.02) {
+        // Define field attemptsavailable to be added to task_adhoc.
+        $table = new xmldb_table('task_adhoc');
+        $field = new xmldb_field(
+            name: 'attemptsavailable',
+            type: XMLDB_TYPE_INTEGER,
+            precision: '1',
+            unsigned: null,
+            notnull: null,
+            sequence: null,
+            default: null,
+            previous: 'pid',
+        );
+
+        // Conditionally launch add field attemptsavailable.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Set attemptsavailable to 0 for the tasks that have not been run before.
+        // Set attemptsavailable to 1 for the tasks that have been run and failed before.
+        $DB->execute('
+            UPDATE {task_adhoc}
+               SET attemptsavailable = CASE
+                                            WHEN faildelay = 0 THEN 1
+                                            WHEN faildelay > 0 THEN 0
+                                       END
+        ');
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2023121800.02);
+    }
+
+    if ($oldversion < 2023122100.01) {
+
+        // Define field component to be added to course_sections.
+        $table = new xmldb_table('course_sections');
+        $field = new xmldb_field('component', XMLDB_TYPE_CHAR, '100', null, null, null, null, 'availability');
+
+        // Conditionally launch add field component.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Define field itemid to be added to course_sections.
+        $field = new xmldb_field('itemid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'component');
+
+        // Conditionally launch add field itemid.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2023122100.01);
+    }
+
+    if ($oldversion < 2023122100.02) {
+        $sqllike = $DB->sql_like('filtercondition', '?');
+        $params[] = '%includesubcategories%';
+
+        $sql = "SELECT qsr.* FROM {question_set_references} qsr WHERE $sqllike";
+        $results = $DB->get_recordset_sql($sql, $params);
+        foreach ($results as $result) {
+            $filtercondition = json_decode($result->filtercondition);
+            if (isset($filtercondition->filter->category->includesubcategories)) {
+                $filtercondition->filter->category->filteroptions =
+                    ['includesubcategories' => $filtercondition->filter->category->includesubcategories];
+                unset($filtercondition->filter->category->includesubcategories);
+                $result->filtercondition = json_encode($filtercondition);
+                $DB->update_record('question_set_references', $result);
+            }
+        }
+        $results->close();
+
+        upgrade_main_savepoint(true, 2023122100.02);
+    }
+
+    if ($oldversion < 2024010400.01) {
+
+        // Define index timecreated (not unique) to be added to notifications.
+        $table = new xmldb_table('notifications');
+        $createdindex = new xmldb_index('timecreated', XMLDB_INDEX_NOTUNIQUE, ['timecreated']);
+
+        // Conditionally launch add index timecreated.
+        if (!$dbman->index_exists($table, $createdindex)) {
+            $dbman->add_index($table, $createdindex);
+        }
+
+        // Define index timeread (not unique) to be added to notifications.
+        $readindex = new xmldb_index('timeread', XMLDB_INDEX_NOTUNIQUE, ['timeread']);
+
+        // Conditionally launch add index timeread.
+        if (!$dbman->index_exists($table, $readindex)) {
+            $dbman->add_index($table, $readindex);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2024010400.01);
+    }
+
+    if ($oldversion < 2024012300.00) {
+
+        // Define field valuetrust to be added to customfield_data.
+        $table = new xmldb_table('customfield_data');
+        $field = new xmldb_field('valuetrust', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0', 'valueformat');
+
+        // Conditionally launch add field valuetrust.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2024012300.00);
     }
 
     return true;

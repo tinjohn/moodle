@@ -10,7 +10,7 @@ Feature: Allow teachers to edit the default activity completion rules in a cours
       | Course 1 | C1        | 0        | 1                |
     And the following "users" exist:
       | username | firstname | lastname | email |
-      | teacher1 | Teacher | Frist | teacher1@example.com |
+      | teacher1 | Teacher | First | teacher1@example.com |
     And the following "course enrolments" exist:
       | user     | course | role           |
       | teacher1 | C1     | editingteacher |
@@ -29,7 +29,7 @@ Feature: Allow teachers to edit the default activity completion rules in a cours
     And I set the field "Course completion tertiary navigation" to "Default activity completion"
     And I click on "Expand Assignment" "button"
     And I set the following fields to these values:
-      | Add requirements          | 1 |
+      | id_completion_assign_2    | 1 |
       | completionview_assign     | 1 |
       | completionusegrade_assign | 1 |
       | completionsubmit_assign   | 1 |

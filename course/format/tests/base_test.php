@@ -508,14 +508,20 @@ class base_test extends advanced_testcase {
      * @param string $key the string key
      * @param string|null $data any string data
      * @param array|null $expectedstring the expected string (null for exception)
+     * @param string $courseformat the course format
      */
-    public function test_get_format_string(string $key, ?string $data, ?array $expectedstring) {
+    public function test_get_format_string(
+        string $key,
+        ?string $data,
+        ?array $expectedstring,
+        string $courseformat = 'topics'
+    ): void {
         global $DB;
 
         $this->resetAfterTest();
 
         $generator = $this->getDataGenerator();
-        $course = $generator->create_course(['format' => 'topics']);
+        $course = $generator->create_course(['format' => $courseformat]);
 
         if ($expectedstring) {
             $expected = get_string($expectedstring[0], $expectedstring[1], $expectedstring[2]);
@@ -535,9 +541,10 @@ class base_test extends advanced_testcase {
     public function get_format_string_provider(): array {
         return [
             'Existing in format lang' => [
-                'key' => 'sectionsdelete',
+                'key' => 'addsection',
                 'data' => null,
-                'expectedstring' => ['sectionsdelete', 'format_topics', null],
+                'expectedstring' => ['addsection', 'format_weeks', null],
+                'courseformat' => 'weeks',
             ],
             'Not existing in format lang' => [
                 'key' => 'bulkedit',
@@ -545,9 +552,9 @@ class base_test extends advanced_testcase {
                 'expectedstring' => ['bulkedit', 'core_courseformat', null],
             ],
             'Existing in format lang with data' => [
-                'key' => 'selectsection',
+                'key' => 'section_highlight_feedback',
                 'data' => 'Example',
-                'expectedstring' => ['selectsection', 'format_topics', 'Example'],
+                'expectedstring' => ['section_highlight_feedback', 'format_topics', 'Example'],
             ],
             'Not existing in format lang with data' => [
                 'key' => 'bulkselection',
@@ -770,6 +777,109 @@ class base_test extends advanced_testcase {
         $format = course_get_format($course);
         $this->assertEmpty($format->get_required_jsfiles());
     }
+
+    /**
+     * Test set_sectionid().
+     *
+     * @covers ::set_sectionid
+     * @covers ::get_sectionid
+     * @covers ::get_sectionnum
+     */
+    public function test_set_sectionid(): void {
+        $this->resetAfterTest();
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course(['numsections' => 2]);
+        $format = course_get_format($course);
+
+        // No section.
+        $this->assertNull($format->get_sectionid());
+        $this->assertNull($format->get_sectionnum());
+
+        // Valid section.
+        $sectionnum = 1;
+        $modinfo = get_fast_modinfo($course);
+        $sectioninfo = $modinfo->get_section_info($sectionnum);
+        $sectionid = $sectioninfo->id;
+        $format->set_sectionid($sectionid);
+        $this->assertEquals($sectionid, $format->get_sectionid());
+        $this->assertEquals($sectionnum, $format->get_sectionnum());
+
+        // Null section.
+        $format->set_sectionid(null);
+        $this->assertNull($format->get_sectionid());
+        $this->assertNull($format->get_sectionnum());
+
+        // Invalid section.
+        $this->expectException(\coding_exception::class);
+        $format->set_sectionid(-1);
+    }
+
+    /**
+     * Test set_sectionnum().
+     *
+     * @dataProvider set_sectionnum_provider
+     * @covers ::set_sectionnum
+     * @param int|null $sectionnum The section number
+     * @param bool $nullexpected If null is expected
+     * @param bool $exceptionexpected If an exception is expected
+     */
+    public function test_set_sectionnum(?int $sectionnum, bool $nullexpected = false, bool $exceptionexpected = false): void {
+        $this->resetAfterTest();
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course(['numsections' => 2]);
+        $format = course_get_format($course);
+
+        if ($exceptionexpected) {
+            $this->expectException(\coding_exception::class);
+        }
+        $format->set_sectionnum($sectionnum);
+        if ($nullexpected) {
+            $this->assertNull($format->get_sectionid());
+            $this->assertNull($format->get_sectionnum());
+        } else {
+            $this->assertNotNull($format->get_sectionid());
+            $this->assertNotNull($format->get_sectionnum());
+        }
+    }
+
+    /**
+     * Data provider for test_set_sectionnum.
+     *
+     * @return array The testing scenarios
+     */
+    public static function set_sectionnum_provider(): array {
+        return [
+            'General sectionnumber' => [
+                'sectionnum' => 0,
+                'nullexpected' => false,
+            ],
+            'Existing sectionnumber' => [
+                'sectionnum' => 1,
+                'nullexpected' => false,
+            ],
+            'Another existing sectionnumber' => [
+                'sectionnum' => 2,
+                'nullexpected' => false,
+            ],
+            'Null sectionnumber' => [
+                'sectionnum' => null,
+                'nullexpected' => true,
+            ],
+            'Invalid sectionnumber' => [
+                'sectionnum' => 3,
+                'nullexpected' => true,
+                'exceptionexpected' => true,
+            ],
+            'Another invalid sectionnumber' => [
+                'sectionnum' => -1,
+                'nullexpected' => true,
+                'exceptionexpected' => true,
+            ],
+        ];
+    }
+
 }
 
 /**

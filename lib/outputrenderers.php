@@ -181,10 +181,10 @@ class renderer_base {
     public function render_from_template($templatename, $context) {
         $mustache = $this->get_mustache();
 
-        try {
+        if ($mustache->hasHelper('uniqid')) {
             // Grab a copy of the existing helper to be restored later.
             $uniqidhelper = $mustache->getHelper('uniqid');
-        } catch (Mustache_Exception_UnknownHelperException $e) {
+        } else {
             // Helper doesn't exist.
             $uniqidhelper = null;
         }
@@ -702,12 +702,11 @@ class core_renderer extends renderer_base {
 
         // Give plugins an opportunity to add any head elements. The callback
         // must always return a string containing valid html head content.
-        $pluginswithfunction = get_plugins_with_function('before_standard_html_head', 'lib.php');
-        foreach ($pluginswithfunction as $plugins) {
-            foreach ($plugins as $function) {
-                $output .= $function();
-            }
-        }
+
+        $hook = new \core\hook\output\standard_head_html_prepend();
+        \core\hook\manager::get_instance()->dispatch($hook);
+        $hook->process_legacy_callbacks();
+        $output .= $hook->get_output();
 
         // Allow a url_rewrite plugin to setup any dynamic head content.
         if (isset($CFG->urlrewriteclass) && !isset($CFG->upgraderunning)) {

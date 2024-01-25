@@ -23,6 +23,7 @@ use coding_exception;
 use context_course;
 use context_module;
 use course_modinfo;
+use core_courseformat\formatactions;
 use moodle_exception;
 use moodle_url;
 use Exception;
@@ -36,6 +37,15 @@ use Exception;
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class modinfolib_test extends advanced_testcase {
+    /**
+     * Setup to ensure that fixtures are loaded.
+     */
+    public static function setUpBeforeClass(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/course/lib.php');
+        require_once($CFG->libdir . '/tests/fixtures/sectiondelegatetest.php');
+    }
+
     public function test_section_info_properties() {
         global $DB, $CFG;
 
@@ -991,6 +1001,14 @@ class modinfolib_test extends advanced_testcase {
             $this->assertInstanceOf('dml_exception', $e);
         }
 
+        // Invalid module ID.
+        try {
+            get_course_and_cm_from_instance(-1, 'page', $course);
+            $this->fail();
+        } catch (moodle_exception $e) {
+            $this->assertStringContainsString('Invalid module ID: -1', $e->getMessage());
+        }
+
         // Invalid module name.
         try {
             get_course_and_cm_from_cmid($page->cmid, '1337 h4x0ring');
@@ -1101,6 +1119,123 @@ class modinfolib_test extends advanced_testcase {
                 'expectexception' => true,
             ],
         ];
+    }
+
+    /**
+     * Test get_section_info_by_component method
+     *
+     * @covers \course_modinfo::get_section_info_by_component
+     * @dataProvider get_section_info_by_component_provider
+     *
+     * @param string $component the component name
+     * @param int $itemid the section number
+     * @param int $strictness the search strict mode
+     * @param bool $expectnull if the function will return a null
+     * @param bool $expectexception if the function will throw an exception
+     */
+    public function test_get_section_info_by_component(
+        string $component,
+        int $itemid,
+        int $strictness,
+        bool $expectnull,
+        bool $expectexception
+    ): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course(['numsections' => 1]);
+
+        formatactions::section($course)->create_delegated('mod_forum', 42);
+
+        $modinfo = get_fast_modinfo($course);
+
+        if ($expectexception) {
+            $this->expectException(moodle_exception::class);
+        }
+
+        $section = $modinfo->get_section_info_by_component($component, $itemid, $strictness);
+
+        if ($expectnull) {
+            $this->assertNull($section);
+        } else {
+            $this->assertEquals($component, $section->component);
+            $this->assertEquals($itemid, $section->itemid);
+        }
+    }
+
+    /**
+     * Data provider for test_get_section_info_by_component().
+     *
+     * @return array
+     */
+    public static function get_section_info_by_component_provider(): array {
+        return [
+            'Valid component and itemid' => [
+                'component' => 'mod_forum',
+                'itemid' => 42,
+                'strictness' => IGNORE_MISSING,
+                'expectnull' => false,
+                'expectexception' => false,
+            ],
+            'Invalid component' => [
+                'component' => 'mod_nonexisting',
+                'itemid' => 42,
+                'strictness' => IGNORE_MISSING,
+                'expectnull' => true,
+                'expectexception' => false,
+            ],
+            'Invalid itemid' => [
+                'component' => 'mod_forum',
+                'itemid' => 0,
+                'strictness' => IGNORE_MISSING,
+                'expectnull' => true,
+                'expectexception' => false,
+            ],
+            'Invalid component and itemid' => [
+                'component' => 'mod_nonexisting',
+                'itemid' => 0,
+                'strictness' => IGNORE_MISSING,
+                'expectnull' => true,
+                'expectexception' => false,
+            ],
+            'Invalid component must exists' => [
+                'component' => 'mod_nonexisting',
+                'itemid' => 42,
+                'strictness' => MUST_EXIST,
+                'expectnull' => true,
+                'expectexception' => true,
+            ],
+            'Invalid itemid must exists' => [
+                'component' => 'mod_forum',
+                'itemid' => 0,
+                'strictness' => MUST_EXIST,
+                'expectnull' => true,
+                'expectexception' => true,
+            ],
+            'Invalid component and itemid must exists' => [
+                'component' => 'mod_nonexisting',
+                'itemid' => 0,
+                'strictness' => MUST_EXIST,
+                'expectnull' => false,
+                'expectexception' => true,
+            ],
+        ];
+    }
+
+    /**
+     * Test has_delegated_sections method
+     *
+     * @covers \course_modinfo::has_delegated_sections
+     */
+    public function test_has_delegated_sections(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course(['numsections' => 1]);
+
+        $modinfo = get_fast_modinfo($course);
+        $this->assertFalse($modinfo->has_delegated_sections());
+
+        formatactions::section($course)->create_delegated('mod_forum', 42);
+
+        $modinfo = get_fast_modinfo($course);
+        $this->assertTrue($modinfo->has_delegated_sections());
     }
 
     /**
@@ -1357,5 +1492,37 @@ class modinfolib_test extends advanced_testcase {
 
         // Obviously, modinfo should include the Page now.
         $this->assertCount(1, $modinfo->get_instances_of('page'));
+    }
+
+    /**
+     * Test for get_component_instance.
+     * @covers \section_info::get_component_instance
+     */
+    public function test_get_component_instance(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course(['format' => 'topics', 'numsections' => 2]);
+
+        course_update_section(
+            $course,
+            $DB->get_record('course_sections', ['course' => $course->id, 'section' => 2]),
+            [
+                'component' => 'test_component',
+                'itemid' => 1,
+            ]
+        );
+
+        $modinfo = get_fast_modinfo($course->id);
+        $sectioninfos = $modinfo->get_section_info_all();
+
+        $this->assertNull($sectioninfos[1]->get_component_instance());
+        $this->assertNull($sectioninfos[1]->component);
+        $this->assertNull($sectioninfos[1]->itemid);
+
+        $this->assertInstanceOf('\core_courseformat\sectiondelegate', $sectioninfos[2]->get_component_instance());
+        $this->assertInstanceOf('\test_component\courseformat\sectiondelegate', $sectioninfos[2]->get_component_instance());
+        $this->assertEquals('test_component', $sectioninfos[2]->component);
+        $this->assertEquals(1, $sectioninfos[2]->itemid);
     }
 }
